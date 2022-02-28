@@ -1,0 +1,8 @@
+ObjectType = Image
+NDims = 3
+BinaryData = True
+BinaryDataByteOrderMSB = True
+DimSize = 300 300 430
+ElementSize = 0.0065 0.0065 0.0065
+ElementType = MET_USHORT
+ElementDataFile = TB11-L0-VOI3.raw
