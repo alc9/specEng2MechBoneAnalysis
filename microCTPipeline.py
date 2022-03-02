@@ -10,16 +10,20 @@ import matplotlib.pyplot as plt
 from vedo import volume,show
 from vedo.applications import *
 import argparse
-
+def boolean_string(skipSeg):
+    if skipSeg not in {'False','True'}:
+        raise ValueError('Not a valid boolean string')
+    return skipSeg =='True'
+ 
 def getInputs():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-s','--seg',
-                        default=True, 
-                        type=bool, 
+    parser.add_argument('-s','--skipseg',
+                        default=True,
+                        type=boolean_string, 
                         help='segment image or skip'
                         )
     args = parser.parse_args()
-    skipSeg = args.seg
+    skipSeg = args.skipseg
     return skipSeg
 
 def signaltonoise(Arr, axis=None, ddof=0):
@@ -28,7 +32,12 @@ def signaltonoise(Arr, axis=None, ddof=0):
     #0.33 is desirable
     sd = Arr.std(axis=axis, ddof=ddof)
     return np.where(sd == 0, 0, me/sd)
-
+"""
+def stdOfLocalNoise(Arr, axis=None, ddof=0):
+    sd = Arr.std(axis=axis,ddof=ddof)
+    me = Arr.mean(axis)
+    return sd,me
+"""
 class ImagePipeline():
     def __init__(self):
         self.fL0="./data/Group18/TB11-L0-VOI3.mhd"
@@ -77,13 +86,13 @@ class ImagePipeline():
     def preProcess(self):
         """
         Preprocessing of image - Apply three filters then decide between them
-        median filter, non-local means filter and __. Also fix orientation
+        median filter, non-local means filter and gaussian smoothing. Also fix orientation
         """
         #-1 is none, 1 = medianImageFilter, 2 = non-local means filter and 3 = n/a
         best=-1
-        orig = signaltonoise(sitk.GetArrayFromImage(self.imageL0))
         noiseFilter = sitk.NoiseImageFilter()
         noiseFilter.SetRadius(3)
+        orig = signaltonoise(sitk.GetArrayFromImage(noiseFilter.Execute(self.imageL0)))
         medianfilter = sitk.MedianImageFilter()
         medianfilter.SetRadius(3)
         meanfilter = sitk.MeanImageFilter()
@@ -93,12 +102,12 @@ class ImagePipeline():
         #median
         L0RatioMedian_=medianfilter.Execute(self.imageL0)
         L0RatioMedian = noiseFilter.Execute(L0RatioMedian_)
-        L0RatioMedian = signaltonoise(sitk.GetArrayFromImage(L0RatioMedian))
+        L0RatioMedian = signaltonoise(sitk.GetArrayFromImage(L0RatioMedian_))
         #mean
         L0RatioMean_=meanfilter.Execute(self.imageL0)
         L0RatioMean=noiseFilter.Execute(L0RatioMean_)
-        L0RatioMean=signaltonoise(sitk.GetArrayFromImage(L0RatioMean))
-        if L0RatioMean < L0RatioMedian:
+        L0RatioMean=signaltonoise(sitk.GetArrayFromImage(L0RatioMean_))
+        if L0RatioMean > L0RatioMedian:
             best=2
             L0RatioMedian_=None
         else:
@@ -106,16 +115,16 @@ class ImagePipeline():
             L0RatioMean_=None
         L0RatioGaus_=gaus.Execute(self.imageL0)
         L0RatioGaus=noiseFilter.Execute(L0RatioGaus_)
-        L0RatioGaus=signaltonoise(sitk.GetArrayFromImage(L0RatioGaus))
+        L0RatioGaus=signaltonoise(sitk.GetArrayFromImage(L0RatioGaus_))
         if L0RatioMedian_ is None:
-            if L0RatioMean < L0RatioGaus:
+            if L0RatioMean > L0RatioGaus:
                 best=2
                 L0RatioGaus_=None
             else:
                 best=3
                 L0RatioMean_=None
         else:
-            if L0RatioMedian < L0RatioGaus:
+            if L0RatioMedian > L0RatioGaus:
                 best=1
                 L0RatioGaus_=None
             else:
@@ -188,7 +197,7 @@ class ImagePipeline():
         self.porosity()
         print("Porosity fL0", self.fL0Porosity, "fL8 ", self.fL8Porosity, "fL10", self.fL10Porosity)
         self.poreSize()
-        print("poreSize fL0", self.fL0PoreSize, "fL8 ", self.fL8PoreSize, "fL10", self.fL10PoreSize)
+        print("poreSize fL0", np.mean(self.fL0PoreSize), "fL8 ", np.mean(self.fL8PoreSize), "fL10", np.mean(self.fL10PoreSize))
         self.thickness()
         #print("thickness fL0", self.fL0Thickness, "fL8 ", self.fL8Thickness, "fL10", self.fL10Thickness)
  
@@ -226,23 +235,25 @@ class ImagePipeline():
 def main():
     print("starting - micro-CT imaging pipeline")
     skipSeg=getInputs()
+    print(skipSeg)
     imP = ImagePipeline()
     if skipSeg is False:
+        print("Displaying meta data")
         imP.displayMeta()
-        #imP.vedoDisplayImage()
-        #input("Press Enter to perform image processing.")
+        imP.vedoDisplayImage()
+        input("Press Enter to perform image processing.")
         imP.preProcess()
         imP.updateCurImgDict()
-        #imP.vedoDisplayImage()
-        #input("Press Enter to perform segmentation.")
+        imP.vedoDisplayImage()
+        input("Press Enter to perform segmentation.")
         imP.thresholdSegmentation()
         imP.updateCurImgDict()
         imP.vedoDisplayImage()
-    #input("Press Enter to assess porosity, thickness, pore size and anisotropy")
+    input("Press Enter to assess porosity, thickness, pore size and anisotropy")
     if skipSeg:
         imP.setVoxelSize()
         imP.updateCurImgDict()
-    #imP.morphologyVals()
+    imP.morphologyVals()
     imP.anisotropy()
     print("ending...")
 if __name__=="__main__":
