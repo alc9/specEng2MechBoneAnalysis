@@ -197,14 +197,17 @@ class ImagePipeline():
         self.porosity()
         print("Porosity fL0", self.fL0Porosity, "fL8 ", self.fL8Porosity, "fL10", self.fL10Porosity)
         self.poreSize()
-        print("poreSize fL0", np.mean(self.fL0PoreSize), "fL8 ", np.mean(self.fL8PoreSize), "fL10", np.mean(self.fL10PoreSize))
+        print("poreSize fL0", [np.mean(self.fL0PoreSize),np.std(self.fL0PoreSize)], "fL8 ", [np.mean(self.fL8PoreSize),np.std(self.fL8PoreSize)], "fL10", [np.mean(self.fL10PoreSize),np.std(self.fL10PoreSize)])
         self.thickness()
-        #print("thickness fL0", self.fL0Thickness, "fL8 ", self.fL8Thickness, "fL10", self.fL10Thickness)
+        print("thickness fL0", self.fL0Thickness, "fL8 ", self.fL8Thickness, "fL10", self.fL10Thickness)
  
     def thickness(self):
-        self.fL0Thickness = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
-        self.fL8Thickness = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
-        self.fL10Thickness = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T)
+        fL0Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
+        self.fL0Thickness=[np.mean(fL0Thickness_),np.std(fL0Thickness_)]
+        fL8Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
+        self.fL8Thickness=[np.mean(fL8Thickness_),np.std(fL8Thickness_)]
+        fL10Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T)
+        self.fL10Thickness=[np.mean(fL10Thickness_),np.std(fL10Thickness_)]
     def porosity(self):
         self.fL0Porosity=ps.metrics.porosity(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
         self.fL8Porosity=ps.metrics.porosity(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
@@ -217,10 +220,10 @@ class ImagePipeline():
         self.fL0PoreSize=fL0PoreSizeDist.R
         por_ = ps.filters.porosimetry(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
         fL8PoreSizeDist = ps.metrics.pore_size_distribution(por_,voxel_size=self.voxelSize,log=False)
-        self.fL8PoreSize=fL0PoreSizeDist.R
+        self.fL8PoreSize=fL8PoreSizeDist.R
         por_ = ps.filters.porosimetry(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T)
         fL10PoreSizeDist = ps.metrics.pore_size_distribution(por_,voxel_size=self.voxelSize,log=False)
-        self.fL10PoreSize=fL0PoreSizeDist.R
+        self.fL10PoreSize=fL10PoreSizeDist.R
     def anisotropy(self):
         import imagej
         ij = imagej.init()
@@ -240,21 +243,21 @@ def main():
     if skipSeg is False:
         print("Displaying meta data")
         imP.displayMeta()
-        imP.vedoDisplayImage()
+        #imP.vedoDisplayImage()
         input("Press Enter to perform image processing.")
         imP.preProcess()
         imP.updateCurImgDict()
-        imP.vedoDisplayImage()
+        #imP.vedoDisplayImage()
         input("Press Enter to perform segmentation.")
         imP.thresholdSegmentation()
         imP.updateCurImgDict()
-        imP.vedoDisplayImage()
+        #imP.vedoDisplayImage()
     input("Press Enter to assess porosity, thickness, pore size and anisotropy")
     if skipSeg:
         imP.setVoxelSize()
         imP.updateCurImgDict()
     imP.morphologyVals()
-    imP.anisotropy()
+    #imP.anisotropy()
     print("ending...")
 if __name__=="__main__":
     main()
