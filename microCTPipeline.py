@@ -18,7 +18,7 @@ def boolean_string(skipSeg):
 def getInputs():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-s','--skipseg',
-                        default=True,
+                        default=False,
                         type=boolean_string, 
                         help='segment image or skip'
                         )
@@ -46,6 +46,7 @@ class ImagePipeline():
         self.imageL0=sitk.ReadImage(self.fL0)
         self.imageL8=sitk.ReadImage(self.fL8)
         self.imageL10=sitk.ReadImage(self.fL10)
+        self.spacing_=[self.imageL0.GetSpacing(),self.imageL8.GetSpacing(),self.imageL10.GetSpacing()]
         #points to most recent file for displaying
         self.curImgDict={"fL0":self.fL0, "fL8":self.fL8, "fL10":self.fL10}
         self.vfL0=volume.Volume(self.fL0)
@@ -158,7 +159,7 @@ class ImagePipeline():
     def setVoxelSize(self):
         self.voxelSize=0.0065
     def vedoDisplayImage(self):
-        print("displaying vfL0")
+        print("displaying fL0")
         plt1 = Slicer3DPlotter(self.vfL0)
         plt1.close()
         print("displaying vfL8")
@@ -202,11 +203,11 @@ class ImagePipeline():
         print("thickness fL0", self.fL0Thickness, "fL8 ", self.fL8Thickness, "fL10", self.fL10Thickness)
  
     def thickness(self):
-        fL0Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
+        fL0Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T) #* self.spacing_[0]
         self.fL0Thickness=[np.mean(fL0Thickness_),np.std(fL0Thickness_)]
-        fL8Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
+        fL8Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T) #* self.spacing_[1]
         self.fL8Thickness=[np.mean(fL8Thickness_),np.std(fL8Thickness_)]
-        fL10Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T)
+        fL10Thickness_ = ps.filters.local_thickness(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T) #* self.spacing_[2]
         self.fL10Thickness=[np.mean(fL10Thickness_),np.std(fL10Thickness_)]
     def porosity(self):
         self.fL0Porosity=ps.metrics.porosity(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
@@ -216,13 +217,13 @@ class ImagePipeline():
     def poreSize(self):
         #pore diameter - 0.15 to 0.01 ish micrometers 
         por_ = ps.filters.porosimetry(sitk.GetArrayFromImage(self.imageL0).astype(np.uint8).T)
-        fL0PoreSizeDist = ps.metrics.pore_size_distribution(por_,voxel_size=self.voxelSize,log=False)
+        fL0PoreSizeDist = ps.metrics.pore_size_distribution(por_,log=False)
         self.fL0PoreSize=fL0PoreSizeDist.R
         por_ = ps.filters.porosimetry(sitk.GetArrayFromImage(self.imageL8).astype(np.uint8).T)
-        fL8PoreSizeDist = ps.metrics.pore_size_distribution(por_,voxel_size=self.voxelSize,log=False)
+        fL8PoreSizeDist = ps.metrics.pore_size_distribution(por_,log=False)
         self.fL8PoreSize=fL8PoreSizeDist.R
         por_ = ps.filters.porosimetry(sitk.GetArrayFromImage(self.imageL10).astype(np.uint8).T)
-        fL10PoreSizeDist = ps.metrics.pore_size_distribution(por_,voxel_size=self.voxelSize,log=False)
+        fL10PoreSizeDist = ps.metrics.pore_size_distribution(por_,log=False)
         self.fL10PoreSize=fL10PoreSizeDist.R
     def anisotropy(self):
         import imagej
@@ -243,19 +244,20 @@ def main():
     if skipSeg is False:
         print("Displaying meta data")
         imP.displayMeta()
-        #imP.vedoDisplayImage()
+        imP.vedoDisplayImage()
         input("Press Enter to perform image processing.")
         imP.preProcess()
         imP.updateCurImgDict()
-        #imP.vedoDisplayImage()
+        imP.vedoDisplayImage()
         input("Press Enter to perform segmentation.")
         imP.thresholdSegmentation()
         imP.updateCurImgDict()
-        #imP.vedoDisplayImage()
+        imP.vedoDisplayImage()
     input("Press Enter to assess porosity, thickness, pore size and anisotropy")
     if skipSeg:
         imP.setVoxelSize()
         imP.updateCurImgDict()
+    print("Results with voxel size = 1")
     imP.morphologyVals()
     #imP.anisotropy()
     print("ending...")
